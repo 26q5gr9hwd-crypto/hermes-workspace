@@ -47,7 +47,7 @@ export type ConnectionState =
   | 'connected'
   | 'error'
 
-type StreamingState = {
+export type StreamingState = {
   runId: string | null
   text: string
   thinking: string
@@ -122,18 +122,33 @@ function stripFinalTags(text: string): string {
  * returned as-is so we don't allocate unnecessarily.
  */
 function stripFinalTagsFromMessage(msg: GatewayMessage): GatewayMessage {
-  if (!Array.isArray(msg.content)) return msg
   let modified = false
-  const nextContent = msg.content.map((part) => {
-    if (part.type !== 'text') return part
-    const raw = (part as any).text ?? ''
-    const stripped = stripFinalTags(typeof raw === 'string' ? raw : String(raw))
-    if (stripped === raw) return part
+  const rawMessage = msg as Record<string, unknown>
+  const nextMessage: GatewayMessage & Record<string, unknown> = { ...msg }
+
+  if (Array.isArray(msg.content)) {
+    const nextContent = msg.content.map((part) => {
+      if (part.type !== 'text') return part
+      const raw = (part as any).text ?? ''
+      const stripped = stripFinalTags(typeof raw === 'string' ? raw : String(raw))
+      if (stripped === raw) return part
+      modified = true
+      return { ...part, text: stripped }
+    })
+    nextMessage.content = nextContent as typeof msg.content
+  }
+
+  for (const key of ['text', 'body', 'message'] as const) {
+    const value = rawMessage[key]
+    if (typeof value !== 'string') continue
+    const stripped = stripFinalTags(value)
+    if (stripped === value) continue
+    nextMessage[key] = stripped
     modified = true
-    return { ...part, text: stripped }
-  })
+  }
+
   if (!modified) return msg
-  return { ...msg, content: nextContent as typeof msg.content }
+  return nextMessage
 }
 
 function getMessageId(msg: GatewayMessage | null | undefined): string | undefined {
@@ -175,7 +190,7 @@ function messageMultipartSignature(msg: GatewayMessage | null | undefined): stri
     for (const key of ['text', 'body', 'message']) {
       const val = raw[key]
       if (typeof val === 'string' && val.trim().length > 0) {
-        content = `t:${val.trim()}`
+        content = `t:${stripFinalTags(val.trim())}`
         break
       }
     }
@@ -415,15 +430,15 @@ export const useGatewayChatStore = create<GatewayChatState>((set, get) => ({
           const sessionMessages = [...(messages.get(sessionKey) ?? [])]
 
           // Deduplicate: by ID or exact content (bug #7 fix).
-          // extractTextFromContent already strips <final> tags, so a previously
-          // stored tagged message will correctly match this clean final message.
-          const completeText = extractTextFromContent(completeMessage.content)
+          // extractMessageText handles both content-array and legacy top-level
+          // text/body/message payloads, and strips <final> tags for both.
+          const completeText = extractMessageText(completeMessage)
           const completeId = getMessageId(completeMessage)
           const isDuplicate = sessionMessages.some((existing) => {
             if (existing.role !== 'assistant') return false
             const existingId = getMessageId(existing)
             if (completeId && existingId && completeId === existingId) return true
-            if (completeText && completeText === extractTextFromContent(existing.content)) return true
+            if (completeText && completeText === extractMessageText(existing)) return true
             return false
           })
 
@@ -438,7 +453,7 @@ export const useGatewayChatStore = create<GatewayChatState>((set, get) => ({
               if (existing.role !== 'assistant') return false
               const existingId = getMessageId(existing)
               if (completeId && existingId && completeId === existingId) return true
-              if (completeText && completeText === extractTextFromContent(existing.content)) return true
+              if (completeText && completeText === extractMessageText(existing)) return true
               return false
             })
             if (existingIdx >= 0) {

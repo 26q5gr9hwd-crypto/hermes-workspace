@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useGatewayChatStream } from '../../../hooks/use-gateway-chat-stream'
 import { useGatewayChatStore } from '../../../stores/gateway-chat-store'
+import type { StreamingState } from '../../../stores/gateway-chat-store'
 import { appendHistoryMessage, chatQueryKeys } from '../chat-queries'
 import { toast } from '../../../components/ui/toast'
 import type { GatewayMessage } from '../types'
@@ -166,9 +167,13 @@ export function useRealtimeChatHistory({
       [queryClient, friendlyId, sessionKey, onUserMessage],
     ),
     onDone: useCallback(
-      (_state: string, eventSessionKey: string) => {
+      (
+        _state: string,
+        eventSessionKey: string,
+        streamingSnapshot: StreamingState | null,
+      ) => {
         const currentState =
-          eventSessionKey === sessionKey ? streamingStateRef.current : null
+          eventSessionKey === sessionKey ? streamingSnapshot : null
         if (currentState?.text) {
           completedStreamingTextRef.current = currentState.text
         }

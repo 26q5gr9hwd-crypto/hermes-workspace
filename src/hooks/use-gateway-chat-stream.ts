@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { useGatewayChatStore } from '../stores/gateway-chat-store'
+import type { StreamingState } from '../stores/gateway-chat-store'
 import type { GatewayMessage } from '../screens/chat/types'
 
 type UseGatewayChatStreamOptions = {
@@ -14,7 +15,11 @@ type UseGatewayChatStreamOptions = {
   /** Callback when assistant thinking updates */
   onThinking?: (text: string, sessionKey: string) => void
   /** Callback when a generation completes */
-  onDone?: (state: string, sessionKey: string) => void
+  onDone?: (
+    state: string,
+    sessionKey: string,
+    streamingSnapshot: StreamingState | null,
+  ) => void
   /** Callback when a tool approval is requested */
   onApprovalRequest?: (approval: Record<string, unknown>) => void
 }
@@ -288,9 +293,11 @@ export function useGatewayChatStream(
           sessionKey: string
           message?: GatewayMessage
         }
+        const streamingSnapshot =
+          useGatewayChatStore.getState().streamingState.get(data.sessionKey) ?? null
         processEvent({ type: 'done', ...data })
         clearStreamTimeout(data.sessionKey)
-        onDoneRef.current?.(data.state, data.sessionKey)
+        onDoneRef.current?.(data.state, data.sessionKey, streamingSnapshot)
       } catch {
         // Ignore parse errors
       }
