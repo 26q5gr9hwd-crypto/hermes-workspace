@@ -1,8 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { isAuthenticated } from '../../../server/auth-middleware'
 import {
-  BEARER_TOKEN,
-  HERMES_API,
+  dashboardFetch,
   ensureGatewayProbed,
   getCapabilities,
 } from '../../../server/gateway-capabilities'
@@ -21,10 +20,6 @@ type McpServerRecord = {
   timeout?: number
   connectTimeout?: number
   auth?: unknown
-}
-
-function authHeaders(): Record<string, string> {
-  return BEARER_TOKEN ? { Authorization: `Bearer ${BEARER_TOKEN}` } : {}
 }
 
 function toStringRecord(value: unknown): Record<string, string> | undefined {
@@ -103,22 +98,23 @@ export const Route = createFileRoute('/api/mcp/servers')({
           return Response.json({
             ...createCapabilityUnavailablePayload('config', {
               message:
-                'Gateway config API unavailable. You can still draft MCP config snippets locally.',
+                'Hermes config API unavailable. You can still draft MCP config snippets locally.',
             }),
             servers: [],
           })
         }
 
         try {
-          const response = await fetch(`${HERMES_API}/api/config`, {
-            headers: authHeaders(),
-          })
+          // Zero-fork architecture: config lives on the dashboard, not the
+          // gateway. dashboardFetch handles session-token auth automatically
+          // and falls back gracefully when the dashboard is unreachable.
+          const response = await dashboardFetch('/api/config')
 
           if (!response.ok) {
             return Response.json({
               servers: [],
               ok: false,
-              message: `Failed to load MCP servers from gateway config (${response.status}).`,
+              message: `Failed to load MCP servers from dashboard config (${response.status}).`,
             })
           }
 
@@ -128,7 +124,7 @@ export const Route = createFileRoute('/api/mcp/servers')({
           return Response.json({
             servers: [],
             ok: false,
-            message: 'Could not reach Hermes gateway config endpoint.',
+            message: 'Could not reach Hermes dashboard config endpoint.',
           })
         }
       },
