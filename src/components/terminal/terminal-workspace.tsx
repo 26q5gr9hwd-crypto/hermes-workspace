@@ -363,7 +363,7 @@ export function TerminalWorkspace({
       // Throttled terminal writes — yields to input events between flushes
       let writeBuf = ''
       let flushTimer: ReturnType<typeof setTimeout> | null = null
-      const FLUSH_MS = 80 // ~12fps — generous gaps for input
+      const FLUSH_MS = 16 // ~60fps — minimal echo lag while still yielding to input
       const MAX_BUF = 8192 // drop old data if buffer overflows (screen redraws)
       function flushWrites() {
         flushTimer = null
@@ -743,7 +743,7 @@ export function TerminalWorkspace({
                         handleCloseTab(tab)
                       }
                     }}
-                    className="hidden rounded p-0.5 text-primary-600 hover:bg-primary-300 hover:text-primary-900 group-hover:inline-flex"
+                    className="inline-flex rounded p-0.5 text-primary-600 hover:bg-primary-300 hover:text-primary-900"
                   >
                     <HugeiconsIcon
                       icon={Cancel01Icon}
