@@ -1,0 +1,98 @@
+From a28e7617d3bb3130d0cee1e45c571d1653d2610d Mon Sep 17 00:00:00 2001
+From: claude-agent <claude-agent@dangpt.ru>
+Date: Thu, 23 Apr 2026 02:52:35 +0000
+Subject: [PATCH] fix(settings-route): remove ghost STT provider section from
+ full settings page (CLIP-UI-4)
+
+---
+ src/routes/settings/index.tsx | 58 ++++++-----------------------------
+ 1 file changed, 9 insertions(+), 49 deletions(-)
+
+diff --git a/src/routes/settings/index.tsx b/src/routes/settings/index.tsx
+index 188e793..7ec0f7e 100644
+--- a/src/routes/settings/index.tsx
++++ b/src/routes/settings/index.tsx
+@@ -1104,7 +1104,6 @@ function HermesConfigSection({
+   const smartRouting =
+     (data.config.smart_model_routing as Record<string, unknown>) || {}
+   const ttsConfig = (data.config.tts as Record<string, unknown>) || {}
+-  const sttConfig = (data.config.stt as Record<string, unknown>) || {}
+   const customProviders = Array.isArray(data.config.custom_providers)
+     ? (data.config.custom_providers as Array<Record<string, unknown>>)
+     : []
+@@ -1113,8 +1112,6 @@ function HermesConfigSection({
+   const ttsEdge = (ttsConfig.edge as Record<string, unknown>) || {}
+   const ttsElevenLabs = (ttsConfig.elevenlabs as Record<string, unknown>) || {}
+   const ttsOpenAi = (ttsConfig.openai as Record<string, unknown>) || {}
+-  const sttProvider = (sttConfig.provider as string) || 'local'
+-  const sttLocal = (sttConfig.local as Record<string, unknown>) || {}
+ 
+   const renderHermesOverview = () => (
+     <>
+@@ -1709,54 +1706,17 @@ function HermesConfigSection({
+ 
+       <SettingsSection
+         title="Speech-to-Text"
+-        description="Configure voice input recognition."
++        description="How voice input works in the composer."
+         icon={Mic01Icon}
+       >
+-        <SettingsRow label="Enable STT" description="Turn on voice input.">
+-          <Switch
+-            checked={readBoolean(sttConfig.enabled, false)}
+-            onCheckedChange={(checked) =>
+-              void saveConfig({ config: { stt: { enabled: checked } } })
+-            }
+-          />
+-        </SettingsRow>
+-        <SettingsRow
+-          label="STT provider"
+-          description="Which speech engine to use."
+-        >
+-          <select
+-            value={sttProvider}
+-            onChange={(e) =>
+-              void saveConfig({ config: { stt: { provider: e.target.value } } })
+-            }
+-            className={selectClassName}
+-          >
+-            <option value="local">Local (Whisper)</option>
+-            <option value="openai">OpenAI Whisper API</option>
+-          </select>
+-        </SettingsRow>
+-        {sttProvider === 'local' && (
+-          <SettingsRow
+-            label="Model size"
+-            description="tiny, base, small, medium, large"
+-          >
+-            <select
+-              value={(sttLocal.model_size as string) || 'base'}
+-              onChange={(e) =>
+-                void saveConfig({
+-                  config: { stt: { local: { model_size: e.target.value } } },
+-                })
+-              }
+-              className={selectClassName}
+-            >
+-              {['tiny', 'base', 'small', 'medium', 'large'].map((size) => (
+-                <option key={size} value={size}>
+-                  {size}
+-                </option>
+-              ))}
+-            </select>
+-          </SettingsRow>
+-        )}
++        <p className="text-xs leading-relaxed text-primary-600 dark:text-neutral-400">
++          Voice input uses your browser&apos;s built-in Web Speech API
++          (Chrome and Edge recommended — not currently supported in Firefox
++          or Safari). Tap the microphone in the composer to dictate;
++          long-press to record a voice note that attaches as an audio file to
++          your message. When Web Speech is unavailable, short-tap falls back
++          to recording a voice note.
++        </p>
+       </SettingsSection>
+     </div>
+   )
+-- 
+2.34.1
+
