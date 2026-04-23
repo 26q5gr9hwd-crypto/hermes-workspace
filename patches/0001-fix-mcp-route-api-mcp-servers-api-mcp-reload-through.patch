@@ -1,0 +1,140 @@
+From e2e08ddff86c2fe264c23ad34ffaef0a43449169 Mon Sep 17 00:00:00 2001
+From: Daniel via Claude <daniel+claude@dangpt.ru>
+Date: Wed, 22 Apr 2026 18:58:06 +0000
+Subject: [PATCH 1/3] fix(mcp): route /api/mcp/servers + /api/mcp/reload
+ through dashboardFetch
+
+Zero-fork architecture: Hermes gateway (:8642) only serves /health,
+/v1/chat/completions, /v1/models. The config API lives on the dashboard
+(:9119) and requires the session token that dashboardFetch() already
+handles. The previous code called fetch(`${HERMES_API}/api/config`) and
+surfaced `Failed to load MCP servers from gateway config (404).` on the
+/mcp page.
+
+- servers.ts: swap direct gateway fetch for dashboardFetch(/api/config);
+  drop unused BEARER_TOKEN/authHeaders imports; update error message to
+  say "dashboard" instead of "gateway". Keep the existing capability
+  fallback so older enhanced-fork backends still work.
+- reload.ts: probe the dashboard first when caps.dashboard.available,
+  then fall through to the gateway reload paths for enhanced-fork
+  backends.
+---
+ src/routes/api/mcp/reload.ts  | 32 +++++++++++++++++++++++++++++++-
+ src/routes/api/mcp/servers.ts | 20 ++++++++------------
+ 2 files changed, 39 insertions(+), 13 deletions(-)
+
+diff --git a/src/routes/api/mcp/reload.ts b/src/routes/api/mcp/reload.ts
+index 4157bea..1f56d47 100644
+--- a/src/routes/api/mcp/reload.ts
++++ b/src/routes/api/mcp/reload.ts
+@@ -1,6 +1,12 @@
+ import { createFileRoute } from '@tanstack/react-router'
+ import { isAuthenticated } from '../../../server/auth-middleware'
+-import { BEARER_TOKEN, HERMES_API } from '../../../server/gateway-capabilities'
++import {
++  BEARER_TOKEN,
++  HERMES_API,
++  dashboardFetch,
++  ensureGatewayProbed,
++  getCapabilities,
++} from '../../../server/gateway-capabilities'
+ 
+ type AuthResult = Response | true
+ 
+@@ -17,6 +23,30 @@ export const Route = createFileRoute('/api/mcp/reload')({
+         const authResult = isAuthenticated(request) as AuthResult
+         if (authResult !== true) return authResult
+ 
++        await ensureGatewayProbed()
++        const dashboardAvailable = getCapabilities().dashboard.available
++
++        // Zero-fork path: try the dashboard first. Vanilla hermes-agent 0.9.x
++        // does not yet expose an MCP reload endpoint — these probes are
++        // forward-compatible for future dashboard versions.
++        if (dashboardAvailable) {
++          for (const path of RELOAD_PATHS) {
++            try {
++              const response = await dashboardFetch(path, { method: 'POST' })
++              if (response.ok) {
++                return Response.json({
++                  ok: true,
++                  message: 'MCP server reload requested.',
++                })
++              }
++            } catch {
++              // Try the next candidate endpoint.
++            }
++          }
++        }
++
++        // Enhanced-fork fallback: older Hermes builds exposed these on the
++        // gateway HTTP API.
+         for (const path of RELOAD_PATHS) {
+           try {
+             const response = await fetch(`${HERMES_API}${path}`, {
+diff --git a/src/routes/api/mcp/servers.ts b/src/routes/api/mcp/servers.ts
+index 269016c..395748f 100644
+--- a/src/routes/api/mcp/servers.ts
++++ b/src/routes/api/mcp/servers.ts
+@@ -1,8 +1,7 @@
+ import { createFileRoute } from '@tanstack/react-router'
+ import { isAuthenticated } from '../../../server/auth-middleware'
+ import {
+-  BEARER_TOKEN,
+-  HERMES_API,
++  dashboardFetch,
+   ensureGatewayProbed,
+   getCapabilities,
+ } from '../../../server/gateway-capabilities'
+@@ -23,10 +22,6 @@ type McpServerRecord = {
+   auth?: unknown
+ }
+ 
+-function authHeaders(): Record<string, string> {
+-  return BEARER_TOKEN ? { Authorization: `Bearer ${BEARER_TOKEN}` } : {}
+-}
+-
+ function toStringRecord(value: unknown): Record<string, string> | undefined {
+   if (!value || typeof value !== 'object' || Array.isArray(value))
+     return undefined
+@@ -103,22 +98,23 @@ export const Route = createFileRoute('/api/mcp/servers')({
+           return Response.json({
+             ...createCapabilityUnavailablePayload('config', {
+               message:
+-                'Gateway config API unavailable. You can still draft MCP config snippets locally.',
++                'Hermes config API unavailable. You can still draft MCP config snippets locally.',
+             }),
+             servers: [],
+           })
+         }
+ 
+         try {
+-          const response = await fetch(`${HERMES_API}/api/config`, {
+-            headers: authHeaders(),
+-          })
++          // Zero-fork architecture: config lives on the dashboard, not the
++          // gateway. dashboardFetch handles session-token auth automatically
++          // and falls back gracefully when the dashboard is unreachable.
++          const response = await dashboardFetch('/api/config')
+ 
+           if (!response.ok) {
+             return Response.json({
+               servers: [],
+               ok: false,
+-              message: `Failed to load MCP servers from gateway config (${response.status}).`,
++              message: `Failed to load MCP servers from dashboard config (${response.status}).`,
+             })
+           }
+ 
+@@ -128,7 +124,7 @@ export const Route = createFileRoute('/api/mcp/servers')({
+           return Response.json({
+             servers: [],
+             ok: false,
+-            message: 'Could not reach Hermes gateway config endpoint.',
++            message: 'Could not reach Hermes dashboard config endpoint.',
+           })
+         }
+       },
+-- 
+2.34.1
+

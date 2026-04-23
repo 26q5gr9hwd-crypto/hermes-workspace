@@ -1,0 +1,45 @@
+From d208291a1b67bac4b499d33a801c4f6e8360671b Mon Sep 17 00:00:00 2001
+From: Claude Agent <claude@dangpt.ru>
+Date: Wed, 22 Apr 2026 20:15:09 +0000
+Subject: [PATCH 3/3] fix(terminal): raise keystroke rate limit (10/min was
+ blocking typing)
+
+Terminal input POSTs one request per keystroke. The previous 10/60s limit
+caused intermittent lag where keys past the 10th in a minute returned 429
+(silently swallowed by the client .catch), making the terminal appear to
+ignore input. Bump terminal-input to 6000/60s (100 keys/s sustained) and
+terminal-stream to 60/60s.
+---
+ src/routes/api/terminal-input.ts  | 2 +-
+ src/routes/api/terminal-stream.ts | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/routes/api/terminal-input.ts b/src/routes/api/terminal-input.ts
+index 2eea961..1bbc234 100644
+--- a/src/routes/api/terminal-input.ts
++++ b/src/routes/api/terminal-input.ts
+@@ -23,7 +23,7 @@ export const Route = createFileRoute('/api/terminal-input')({
+         if (csrfCheck) return csrfCheck
+ 
+         const ip = getClientIp(request)
+-        if (!rateLimit(`terminal:${ip}`, 10, 60_000)) {
++        if (!rateLimit(`terminal:${ip}`, 6000, 60_000)) {
+           return rateLimitResponse()
+         }
+ 
+diff --git a/src/routes/api/terminal-stream.ts b/src/routes/api/terminal-stream.ts
+index 04df4b0..4bfec80 100644
+--- a/src/routes/api/terminal-stream.ts
++++ b/src/routes/api/terminal-stream.ts
+@@ -24,7 +24,7 @@ export const Route = createFileRoute('/api/terminal-stream')({
+         const csrfCheck = requireJsonContentType(request)
+         if (csrfCheck) return csrfCheck
+         const ip = getClientIp(request)
+-        if (!rateLimit(`terminal-stream:${ip}`, 10, 60_000)) {
++        if (!rateLimit(`terminal-stream:${ip}`, 60, 60_000)) {
+           return rateLimitResponse()
+         }
+ 
+-- 
+2.34.1
+

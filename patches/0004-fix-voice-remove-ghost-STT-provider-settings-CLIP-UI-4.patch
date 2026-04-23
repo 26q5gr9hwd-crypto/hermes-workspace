@@ -1,0 +1,133 @@
+From 4edb884b9f239450573cf975220e44fea91f0b00 Mon Sep 17 00:00:00 2001
+From: claude-agent <claude-agent@dangpt.ru>
+Date: Thu, 23 Apr 2026 02:49:42 +0000
+Subject: [PATCH] fix(voice): remove ghost STT provider settings and add error
+ toast + recorder fallback (CLIP-UI-4)
+
+---
+ .../settings-dialog/settings-dialog.tsx       | 42 ++++---------------
+ src/screens/chat/components/chat-composer.tsx | 19 ++++++++-
+ 2 files changed, 25 insertions(+), 36 deletions(-)
+
+diff --git a/src/components/settings-dialog/settings-dialog.tsx b/src/components/settings-dialog/settings-dialog.tsx
+index 8215618..95b93cd 100644
+--- a/src/components/settings-dialog/settings-dialog.tsx
++++ b/src/components/settings-dialog/settings-dialog.tsx
+@@ -1664,7 +1664,6 @@ function SmartRoutingContent() {
+ 
+ function VoiceContent() {
+   const [tts, setTts] = useState<Record<string, unknown>>({})
+-  const [stt, setStt] = useState<Record<string, unknown>>({})
+   const [msg, setMsg] = useState<string | null>(null)
+ 
+   useEffect(() => {
+@@ -1672,7 +1671,6 @@ function VoiceContent() {
+       .then((r) => r.json())
+       .then((d: any) => {
+         setTts((d.config?.tts as Record<string, unknown>) || {})
+-        setStt((d.config?.stt as Record<string, unknown>) || {})
+       })
+       .catch(() => {})
+   }, [])
+@@ -1693,22 +1691,6 @@ function VoiceContent() {
+     }
+   }
+ 
+-  const saveStt = async (key: string, value: unknown) => {
+-    setMsg(null)
+-    try {
+-      await fetch('/api/hermes-config', {
+-        method: 'PATCH',
+-        headers: { 'Content-Type': 'application/json' },
+-        body: JSON.stringify({ config: { stt: { [key]: value } } }),
+-      })
+-      setStt((prev) => ({ ...prev, [key]: value }))
+-      setMsg('Saved')
+-      setTimeout(() => setMsg(null), 2000)
+-    } catch {
+-      setMsg('Failed')
+-    }
+-  }
+-
+   const ttsProvider = String(tts.provider || 'edge')
+ 
+   return (
+@@ -1774,22 +1756,14 @@ function VoiceContent() {
+         <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-primary-500">
+           Speech-to-Text
+         </p>
+-        <Row label="Enable STT">
+-          <Switch
+-            checked={stt.enabled !== false}
+-            onCheckedChange={(c) => saveStt('enabled', c)}
+-          />
+-        </Row>
+-        <Row label="STT Provider">
+-          <select
+-            value={String(stt.provider || 'local')}
+-            onChange={(e) => saveStt('provider', e.target.value)}
+-            className="h-8 rounded-lg border border-primary-200 bg-primary-50 px-2 text-sm text-primary-900 outline-none dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+-          >
+-            <option value="local">Local (Whisper)</option>
+-            <option value="openai">OpenAI Whisper</option>
+-          </select>
+-        </Row>
++        <p className="text-xs leading-relaxed text-primary-600 dark:text-neutral-400">
++          Voice input uses your browser&apos;s built-in Web Speech API
++          (Chrome and Edge recommended — not currently supported in Firefox or
++          Safari). Tap the microphone in the composer to dictate; long-press to
++          record a voice note that attaches as an audio file to your message.
++          When Web Speech is unavailable, short-tap falls back to recording a
++          voice note.
++        </p>
+       </div>
+     </div>
+   )
+diff --git a/src/screens/chat/components/chat-composer.tsx b/src/screens/chat/components/chat-composer.tsx
+index db2533d..2077041 100644
+--- a/src/screens/chat/components/chat-composer.tsx
++++ b/src/screens/chat/components/chat-composer.tsx
+@@ -1458,7 +1458,7 @@ function ChatComposerComponent({
+   const _isWebSearchActive = webSearchEnabled ?? isWebSearchMode
+   void _isWebSearchActive // retained for future use / external prop
+ 
+-  // Voice input (tap = speech-to-text)
++  // Voice input (tap = speech-to-text via Web Speech API)
+   const voiceInput = useVoiceInput({
+     onResult: useCallback(
+       (text: string) => {
+@@ -1471,6 +1471,10 @@ function ChatComposerComponent({
+       },
+       [persistDraft],
+     ),
++    onError: useCallback((error: string) => {
++      // aborted / no-speech are silently handled inside the hook
++      toast(`Voice input error: ${error}`, { type: 'error' })
++    }, []),
+   })
+ 
+   // Voice recorder (long-press = voice note)
+@@ -1992,8 +1996,19 @@ function ChatComposerComponent({
+                         voiceInput.stop()
+                       } else if (voiceRecorder.isRecording) {
+                         voiceRecorder.stop()
+-                      } else {
++                      } else if (voiceInput.isSupported) {
+                         voiceInput.start()
++                      } else if (voiceRecorder.isSupported) {
++                        // Browser has no Web Speech API — short-tap records a voice note instead
++                        toast(
++                          'Speech-to-text unavailable here — recording a voice note instead. Long-press to explicitly record.',
++                          { type: 'info' },
++                        )
++                        voiceRecorder.start()
++                      } else {
++                        toast('Voice input not supported in this browser', {
++                          type: 'warning',
++                        })
+                       }
+                     }}
+                     onPointerDown={handleMicPointerDown}
+-- 
+2.34.1
+
