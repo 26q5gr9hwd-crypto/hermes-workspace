@@ -489,6 +489,7 @@ export const Route = createFileRoute('/api/send-stream')({
                         phase: 'start',
                         name: chunk.name,
                         toolCallId: `${runId}:${chunk.name}:${toolEventCount}`,
+                        args: chunk.label,
                         preview: chunk.label,
                         sessionKey: portableSessionKey,
                         runId,
