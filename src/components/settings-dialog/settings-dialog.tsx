@@ -1664,7 +1664,6 @@ function SmartRoutingContent() {
 
 function VoiceContent() {
   const [tts, setTts] = useState<Record<string, unknown>>({})
-  const [stt, setStt] = useState<Record<string, unknown>>({})
   const [msg, setMsg] = useState<string | null>(null)
 
   useEffect(() => {
@@ -1672,7 +1671,6 @@ function VoiceContent() {
       .then((r) => r.json())
       .then((d: any) => {
         setTts((d.config?.tts as Record<string, unknown>) || {})
-        setStt((d.config?.stt as Record<string, unknown>) || {})
       })
       .catch(() => {})
   }, [])
@@ -1686,22 +1684,6 @@ function VoiceContent() {
         body: JSON.stringify({ config: { tts: { [key]: value } } }),
       })
       setTts((prev) => ({ ...prev, [key]: value }))
-      setMsg('Saved')
-      setTimeout(() => setMsg(null), 2000)
-    } catch {
-      setMsg('Failed')
-    }
-  }
-
-  const saveStt = async (key: string, value: unknown) => {
-    setMsg(null)
-    try {
-      await fetch('/api/hermes-config', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ config: { stt: { [key]: value } } }),
-      })
-      setStt((prev) => ({ ...prev, [key]: value }))
       setMsg('Saved')
       setTimeout(() => setMsg(null), 2000)
     } catch {
@@ -1774,22 +1756,14 @@ function VoiceContent() {
         <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-primary-500">
           Speech-to-Text
         </p>
-        <Row label="Enable STT">
-          <Switch
-            checked={stt.enabled !== false}
-            onCheckedChange={(c) => saveStt('enabled', c)}
-          />
-        </Row>
-        <Row label="STT Provider">
-          <select
-            value={String(stt.provider || 'local')}
-            onChange={(e) => saveStt('provider', e.target.value)}
-            className="h-8 rounded-lg border border-primary-200 bg-primary-50 px-2 text-sm text-primary-900 outline-none dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
-          >
-            <option value="local">Local (Whisper)</option>
-            <option value="openai">OpenAI Whisper</option>
-          </select>
-        </Row>
+        <p className="text-xs leading-relaxed text-primary-600 dark:text-neutral-400">
+          Voice input uses your browser&apos;s built-in Web Speech API
+          (Chrome and Edge recommended — not currently supported in Firefox or
+          Safari). Tap the microphone in the composer to dictate; long-press to
+          record a voice note that attaches as an audio file to your message.
+          When Web Speech is unavailable, short-tap falls back to recording a
+          voice note.
+        </p>
       </div>
     </div>
   )

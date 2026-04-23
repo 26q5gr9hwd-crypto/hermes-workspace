@@ -1458,7 +1458,7 @@ function ChatComposerComponent({
   const _isWebSearchActive = webSearchEnabled ?? isWebSearchMode
   void _isWebSearchActive // retained for future use / external prop
 
-  // Voice input (tap = speech-to-text)
+  // Voice input (tap = speech-to-text via Web Speech API)
   const voiceInput = useVoiceInput({
     onResult: useCallback(
       (text: string) => {
@@ -1471,6 +1471,10 @@ function ChatComposerComponent({
       },
       [persistDraft],
     ),
+    onError: useCallback((error: string) => {
+      // aborted / no-speech are silently handled inside the hook
+      toast(`Voice input error: ${error}`, { type: 'error' })
+    }, []),
   })
 
   // Voice recorder (long-press = voice note)
@@ -1992,8 +1996,19 @@ function ChatComposerComponent({
                         voiceInput.stop()
                       } else if (voiceRecorder.isRecording) {
                         voiceRecorder.stop()
-                      } else {
+                      } else if (voiceInput.isSupported) {
                         voiceInput.start()
+                      } else if (voiceRecorder.isSupported) {
+                        // Browser has no Web Speech API — short-tap records a voice note instead
+                        toast(
+                          'Speech-to-text unavailable here — recording a voice note instead. Long-press to explicitly record.',
+                          { type: 'info' },
+                        )
+                        voiceRecorder.start()
+                      } else {
+                        toast('Voice input not supported in this browser', {
+                          type: 'warning',
+                        })
                       }
                     }}
                     onPointerDown={handleMicPointerDown}
